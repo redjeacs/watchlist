@@ -1,69 +1,83 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useState, useEffect } from "react";
+import { StockDataResponse } from "@/types/stock"; // Adjust path if you didn't move the folder
+import Header from "@/components/Header";
+import SearchForm from "@/components/SearchForm";
+import StockCard from "@/components/StockCard";
+
+export default function WatchlistPage() {
+  const [watchlist, setWatchlist] = useState<StockDataResponse[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Add a stock card to the tracking list state
+  const handleAddTicker = async (symbol: string) => {
+    if (watchlist.some((stock) => stock.symbol === symbol)) {
+      setError(`${symbol} is already on your watchlist.`);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/stock?symbol=${symbol}`);
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || "Failed to fetch stock data");
+      }
+
+      const data: StockDataResponse = await response.json();
+      setWatchlist((prev) => [data, ...prev]);
+    } catch (err: any) {
+      setError(err.message || "Stock symbol not found.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Remove a stock card from the tracking list state
+  const handleRemoveStock = (symbolToRemove: string) => {
+    setWatchlist((prev) =>
+      prev.filter((stock) => stock.symbol !== symbolToRemove),
+    );
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-25"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <main className="min-h-screen bg-slate-950 text-slate-100 p-6 md:p-12">
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <Header />
+        {/* Search Form Input */}
+        <SearchForm
+          onAddTicker={handleAddTicker}
+          loading={loading}
+          error={error}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/6 px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/8">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-39.5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-3.5 w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/8 px-5 transition-colors hover:border-transparent hover:bg-black/4 dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-39.5"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+        {/* Watchlist Grid View Render */}
+        {watchlist.length === 0 ? (
+          <div className="text-center py-16 border border-dashed border-slate-800 rounded-2xl bg-slate-900/20">
+            <p className="text-slate-500 font-medium">
+              Your watchlist is empty.
+            </p>
+            <p className="text-slate-600 text-sm mt-1">
+              Type an equity symbol above to get real-time trends.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {watchlist.map((stock) => (
+              <StockCard
+                key={stock.symbol}
+                stock={stock}
+                onRemove={handleRemoveStock}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </main>
   );
 }
