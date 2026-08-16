@@ -15,7 +15,5 @@ export interface AlpacaSnapshot {
 }
 
 export interface AlpacaApiResponse {
-  snapshots?: {
-    [key: string]: AlpacaSnapshot;
-  };
+  [symbol: string]: AlpacaSnapshot | any;
 }

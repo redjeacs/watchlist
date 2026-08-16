@@ -12,8 +12,8 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const keyId = process.env.ALPACA_KEY_ID;
-  const secretKey = process.env.ALPACA_SECRET_KEY;
+  const keyId = process.env.ALPACA_API_KEY;
+  const secretKey = process.env.ALPACA_API_SECRET;
 
   if (!keyId || !secretKey) {
     console.error("Missing Alpaca API Environment Keys");
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const url = `https://alpaca.markets{symbol}`;
+  const url = `https://data.alpaca.markets/v2/stocks/snapshots?symbols=${symbol}`;
 
   try {
     const response = await fetch(url, {
@@ -36,11 +36,19 @@ export async function GET(request: NextRequest) {
     });
 
     if (!response.ok) {
-      throw new Error(`Alpaca API error status: ${response.status}`);
+      const errorText = await response.text();
+      console.error(
+        `Alpaca failed with status ${response.status}. Raw Response: ${errorText}`,
+      );
+
+      return NextResponse.json(
+        { error: `Alpaca error status ${response.status}` },
+        { status: response.status },
+      );
     }
 
     const data: AlpacaApiResponse = await response.json();
-    const snapshot = data.snapshots?.[symbol];
+    const snapshot = data[symbol];
 
     if (!snapshot) {
       return NextResponse.json(
@@ -58,7 +66,7 @@ export async function GET(request: NextRequest) {
       ? (dailyChange / previousClose) * 100
       : 0;
 
-    // Construct the structured response matching our interface type declaration
+    // Construct the structured response matching interface type declaration
     const responseData: StockDataResponse = {
       symbol,
       price: currentPrice,
