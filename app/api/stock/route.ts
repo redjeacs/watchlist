@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { AlpacaApiResponse, StockDataResponse } from "@/types/stock";
 
@@ -28,6 +30,7 @@ export async function GET(request: NextRequest) {
   try {
     const response = await fetch(url, {
       method: "GET",
+      cache: "no-store",
       headers: {
         "APCA-API-KEY-ID": keyId,
         "APCA-API-SECRET-KEY": secretKey,
@@ -59,7 +62,7 @@ export async function GET(request: NextRequest) {
 
     // Extract raw metrics with strict fallbacks to avoid unexpected NaN or undefined errors
     const currentPrice = snapshot.latestTrade?.p || 0;
-    const previousClose = snapshot.dailyBar?.c || 0;
+    const previousClose = snapshot.prevDailyBar?.c || 0;
 
     const dailyChange = previousClose ? currentPrice - previousClose : 0;
     const dailyChangePercent = previousClose
@@ -70,10 +73,11 @@ export async function GET(request: NextRequest) {
     const responseData: StockDataResponse = {
       symbol,
       price: currentPrice,
-      dailyChange: parseFloat(dailyChange.toFixed(2)),
-      dailyChangePercent: parseFloat(dailyChangePercent.toFixed(2)),
+      dailyChange: parseFloat(dailyChange.toFixed(4)),
+      dailyChangePercent: parseFloat(dailyChangePercent.toFixed(4)),
     };
 
+    console.log(data);
     return NextResponse.json(responseData);
   } catch (error) {
     console.error("Backend TypeScript API Error:", error);
