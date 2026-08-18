@@ -77,7 +77,6 @@ export async function GET(request: NextRequest) {
       dailyChangePercent: parseFloat(dailyChangePercent.toFixed(4)),
     };
 
-    console.log(data);
     return NextResponse.json(responseData);
   } catch (error) {
     console.error("Backend TypeScript API Error:", error);
