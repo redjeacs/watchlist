@@ -5,9 +5,13 @@ import { StockDataResponse } from "@/types/stock"; // Adjust path if you didn't 
 import Header from "@/components/Header";
 import SearchForm from "@/components/SearchForm";
 import StockCard from "@/components/StockCard";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
 
 export default function WatchlistPage() {
-  const [watchlist, setWatchlist] = useState<StockDataResponse[]>([]);
+  const [watchlist, setWatchlist] = useLocalStorage<StockDataResponse[]>(
+    "stock_watchlist",
+    [],
+  );
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,7 +50,10 @@ export default function WatchlistPage() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 p-6 md:p-12">
+    <main
+      suppressHydrationWarning
+      className="min-h-screen bg-slate-950 text-slate-100 p-6 md:p-12"
+    >
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <Header />
