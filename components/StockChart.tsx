@@ -24,6 +24,7 @@ export default function StockChart({ symbol }: { symbol: string }) {
   const [timeframe, setTimeframe] = useState<Timeframe>("1M");
   const [data, setData] = useState<ChartPoint[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  console.log(timeframe);
 
   useEffect(() => {
     async function fetchHistoricalData() {

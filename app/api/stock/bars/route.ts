@@ -21,32 +21,34 @@ export async function GET(request: NextRequest) {
   // Calculate timeframe requirements precisely
   const now = new Date();
   let start = new Date();
-  let alpacaTimeframe = "1Day";
+  let alpacaTimeframe = "1M";
+
+  const isWeekend = now.getDay() === 0 || now.getDay() === 6;
 
   switch (timeframe) {
     case "1D":
-      start.setDate(now.getDate() - 1);
-      alpacaTimeframe = "1D";
+      start.setDate(now.getDate() - (isWeekend ? 3 : 1));
+      alpacaTimeframe = "30Min";
       break;
     case "5D":
-      start.setDate(now.getDate() - 5);
-      alpacaTimeframe = "5D";
+      start.setDate(now.getDate() - 7);
+      alpacaTimeframe = "1Hour";
       break;
     case "1M":
       start.setMonth(now.getMonth() - 1);
-      alpacaTimeframe = "1M";
+      alpacaTimeframe = "1Day";
       break;
     case "6M":
       start.setMonth(now.getMonth() - 6);
-      alpacaTimeframe = "6M";
+      alpacaTimeframe = "1Day";
       break;
     case "1Y":
       start.setFullYear(now.getFullYear() - 1);
-      alpacaTimeframe = "1Y";
+      alpacaTimeframe = "1Day";
       break;
     case "MAX":
       start.setFullYear(now.getFullYear() - 5); // 5-year free tier limit
-      alpacaTimeframe = "1D";
+      alpacaTimeframe = "1Week";
       break;
   }
 
