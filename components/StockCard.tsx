@@ -1,4 +1,5 @@
 import { StockDataResponse } from "@/types/stock";
+import Link from "next/link";
 
 interface StockCardProps {
   stock: StockDataResponse;
@@ -9,9 +10,15 @@ const StockCard = ({ stock, onRemove }: StockCardProps) => {
   const isPositive = stock.dailyChange >= 0;
 
   return (
-    <div className="bg-slate-900 border border-slate-800/80 rounded-xl p-5 hover:border-slate-700/80 transition-all duration-200 relative group shadow-xl">
+    <Link
+      href={`/stock/${stock.symbol}`}
+      className="bg-slate-900 border border-slate-800/80 rounded-xl p-5 hover:border-slate-700/80 transition-all duration-200 relative group shadow-xl"
+    >
       <button
-        onClick={() => onRemove(stock.symbol)}
+        onClick={(e) => {
+          e.preventDefault();
+          onRemove(stock.symbol);
+        }}
         className="absolute top-3 right-3 text-slate-500 hover:text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity p-1 text-xs"
         title={`Remove ${stock.symbol}`}
       >
@@ -44,7 +51,7 @@ const StockCard = ({ stock, onRemove }: StockCardProps) => {
           {isPositive ? "▲" : "▼"} ${Math.abs(stock.dailyChange).toFixed(2)}
         </span>
       </div>
-    </div>
+    </Link>
   );
 };
 
