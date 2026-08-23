@@ -26,31 +26,31 @@ export async function GET(request: NextRequest) {
   switch (timeframe) {
     case "1D":
       start.setDate(now.getDate() - 1);
-      alpacaTimeframe = "5Min";
+      alpacaTimeframe = "1D";
       break;
     case "5D":
       start.setDate(now.getDate() - 5);
-      alpacaTimeframe = "1Hour";
+      alpacaTimeframe = "5D";
       break;
     case "1M":
       start.setMonth(now.getMonth() - 1);
-      alpacaTimeframe = "1Day";
+      alpacaTimeframe = "1M";
       break;
     case "6M":
       start.setMonth(now.getMonth() - 6);
-      alpacaTimeframe = "1Day";
+      alpacaTimeframe = "6M";
       break;
     case "1Y":
       start.setFullYear(now.getFullYear() - 1);
-      alpacaTimeframe = "1Day";
+      alpacaTimeframe = "1Y";
       break;
     case "MAX":
       start.setFullYear(now.getFullYear() - 5); // 5-year free tier limit
-      alpacaTimeframe = "1Week";
+      alpacaTimeframe = "1D";
       break;
   }
 
-  const url = `https://alpaca.markets{symbol}/bars?start=${start.toISOString()}&end=${now.toISOString()}&timeframe=${alpacaTimeframe}&currency=USD&feed=sip`;
+  const url = `https://data.alpaca.markets/v2/stocks/bars?symbols=${symbol}&start=${start.toISOString()}&end=${now.toISOString()}&timeframe=${alpacaTimeframe}&currency=USD&feed=iex`;
 
   try {
     const response = await fetch(url, {
@@ -62,15 +62,35 @@ export async function GET(request: NextRequest) {
       },
     });
 
+    const rawResponseText = await response.text();
+
+    if (rawResponseText.trim().startsWith("<!DOCTYPE")) {
+      console.error(
+        "=================== ALPACA RETURNED HTML PAGE ===================",
+      );
+      console.error(url);
+      console.error(
+        "This is what Alpaca is complaining about:\n",
+        rawResponseText.slice(0, 500),
+      );
+      console.error(
+        "=================================================================",
+      );
+
+      // Return a clean empty array instead of throwing a 500 parse crash
+      return NextResponse.json([]);
+    }
+
     if (!response.ok) {
+      console.error(`Alpaca Error (${response.status}):`, rawResponseText);
       return NextResponse.json(
-        { error: "Alpaca bars failed" },
+        { error: `Alpaca error: ${response.status}` },
         { status: response.status },
       );
     }
 
-    const data = await response.json();
-    const bars = data.bars || [];
+    const data = JSON.parse(rawResponseText);
+    const bars = data.bars?.[symbol] || [];
 
     // Map raw data points safely for client line graph execution
     const chartData = bars.map((bar: any) => ({
