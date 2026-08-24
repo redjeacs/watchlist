@@ -25,7 +25,7 @@ export default async function StockDetailPage({ params }: PageProps) {
             ← Back to Watchlist
           </Link>
           <span className="px-2.5 py-1 text-xs font-mono font-semibold bg-slate-900 border border-slate-800 text-slate-400 rounded-md">
-            Live Feed: SIP
+            Live Feed: IEX
           </span>
         </div>
 

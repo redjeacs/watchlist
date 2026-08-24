@@ -97,6 +97,7 @@ export async function GET(request: NextRequest) {
     // Map raw data points safely for client line graph execution
     const chartData = bars.map((bar: any) => ({
       date: new Date(bar.t).toLocaleDateString(undefined, {
+        year: "numeric",
         month: "short",
         day: "numeric",
         hour: timeframe === "1D" || timeframe === "5D" ? "2-digit" : undefined,

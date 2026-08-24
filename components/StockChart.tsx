@@ -47,11 +47,9 @@ export default function StockChart({ symbol }: { symbol: string }) {
     if (symbol) fetchHistoricalData();
   }, [symbol, timeframe]);
 
-  console.log(data);
-
   const prices = data.map((d) => d.price);
-  const minPrice = prices.length ? Math.min(...prices) * 0.99 : 0;
-  const maxPrice = prices.length ? Math.max(...prices) * 1.01 : 100;
+  const minPrice = prices.length ? Math.round(Math.min(...prices) - 10) : 0;
+  const maxPrice = prices.length ? Math.round(Math.max(...prices) + 10) : 100;
 
   // Premium feature: Dynamic color profiles based on selected period gains
   const isPositive =
@@ -112,16 +110,20 @@ export default function StockChart({ symbol }: { symbol: string }) {
               />
               <XAxis
                 dataKey="date"
-                tickLine={false}
-                axisLine={false}
+                tickLine={true}
+                interval={Math.floor(data.length / 6)}
+                axisLine={true}
+                niceTicks="auto"
                 stroke="#475569"
                 fontSize={10}
                 dy={8}
               />
               <YAxis
                 domain={[minPrice, maxPrice]}
-                tickLine={false}
-                axisLine={false}
+                tickLine={true}
+                tickCount={5}
+                axisLine={true}
+                niceTicks="auto"
                 stroke="#475569"
                 fontSize={10}
                 dx={-5}
