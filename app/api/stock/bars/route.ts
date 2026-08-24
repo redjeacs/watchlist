@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
       break;
   }
 
-  const url = `https://data.alpaca.markets/v2/stocks/bars?symbols=${symbol}&start=${start.toISOString()}&end=${now.toISOString()}&timeframe=${alpacaTimeframe}&currency=USD&feed=iex`;
+  const url = `https://data.alpaca.markets/v2/stocks/bars?symbols=${symbol}&start=${start.toISOString()}&end=${now.toISOString()}&timeframe=${alpacaTimeframe}&currency=USD&feed=iex&adjustment=split`;
 
   try {
     const response = await fetch(url, {
@@ -102,7 +102,7 @@ export async function GET(request: NextRequest) {
         day: "numeric",
         hour: timeframe === "1D" || timeframe === "5D" ? "2-digit" : undefined,
       }),
-      price: Math.round(bar.c * 100) / 100,
+      price: parseFloat(bar.c.toFixed(2)),
     }));
 
     return NextResponse.json(chartData);

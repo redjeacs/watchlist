@@ -51,6 +51,8 @@ export default function StockChart({ symbol }: { symbol: string }) {
   const minPrice = prices.length ? Math.round(Math.min(...prices) - 10) : 0;
   const maxPrice = prices.length ? Math.round(Math.max(...prices) + 10) : 100;
 
+  console.log(data);
+
   // Premium feature: Dynamic color profiles based on selected period gains
   const isPositive =
     data.length >= 2 ? data[data.length - 1].price >= data[0].price : true;
