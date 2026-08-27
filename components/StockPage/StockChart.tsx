@@ -24,7 +24,6 @@ export default function StockChart({ symbol }: { symbol: string }) {
   const [timeframe, setTimeframe] = useState<Timeframe>("1M");
   const [data, setData] = useState<ChartPoint[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  console.log(timeframe);
 
   useEffect(() => {
     async function fetchHistoricalData() {
@@ -51,9 +50,6 @@ export default function StockChart({ symbol }: { symbol: string }) {
   const minPrice = prices.length ? Math.round(Math.min(...prices) - 10) : 0;
   const maxPrice = prices.length ? Math.round(Math.max(...prices) + 10) : 100;
 
-  console.log(data);
-
-  // Premium feature: Dynamic color profiles based on selected period gains
   const isPositive =
     data.length >= 2 ? data[data.length - 1].price >= data[0].price : true;
   const strokeColor = isPositive ? "#34d399" : "#f87171"; // emerald-400 vs rose-400

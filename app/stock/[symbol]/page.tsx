@@ -1,5 +1,5 @@
 import Link from "next/link";
-import StockChart from "@/components/StockChart"; // Make sure to adjust path if needed
+import StockChart from "@/components/StockPage/StockChart"; // Make sure to adjust path if needed
 
 interface PageProps {
   params: Promise<{ symbol: string }>;
