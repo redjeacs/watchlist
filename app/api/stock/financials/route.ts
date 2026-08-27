@@ -1,12 +1,11 @@
 export const dynamic = "force-dynamic";
-
-import { cp } from "fs";
 import { NextRequest, NextResponse } from "next/server";
 
 const SEC_CIK_LOOKUP_KEY = process.env.SEC_CIK_LOOKUP_KEY;
 
 const DIRECT_SEC_HEADERS = {
-  "User-Agent": "MyFinancialApp/1.0 (contact@myfinancialapp.com)",
+  "User-Agent": "MyFinancialApp/1.0 (jerryc19112235@gmail.com)",
+  Accept: "application/json",
   "Accept-Encoding": "gzip, deflate",
 };
 
@@ -17,7 +16,7 @@ async function getCikFromSecApiIo(symbol: string): Promise<string | null> {
   }
 
   try {
-    const url = `https://sec-api.io${symbol}?token=${SEC_CIK_LOOKUP_KEY}`;
+    const url = `https://api.sec-api.io/mapping/ticker/${symbol}?token=${SEC_CIK_LOOKUP_KEY}`;
 
     const response = await fetch(url, {
       method: "GET",
@@ -55,15 +54,16 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const cik = await getCikFromSecApiIo(symbol);
-    if (!cik) {
+    const rawCik = await getCikFromSecApiIo(symbol);
+    if (!rawCik) {
       return NextResponse.json(
         { error: `CIK lookup failed for ticker symbol: ${symbol}` },
         { status: 404 },
       );
     }
+    const cik = rawCik.padStart(10, "0");
 
-    const factsUrl = `https://sec.gov/api/xbrl/companyfacts/CIK${cik}.json`;
+    const factsUrl = `https://data.sec.gov/api/xbrl/companyfacts/CIK${cik}.json`;
     const factsResponse = await fetch(factsUrl, {
       headers: DIRECT_SEC_HEADERS,
     });

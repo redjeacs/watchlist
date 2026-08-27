@@ -11,6 +11,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { Loader2 } from "lucide-react";
+import StockFinancials from "./StockFinancials";
 
 const TIMEFRAMES = ["1D", "5D", "1M", "6M", "1Y", "MAX"] as const;
 type Timeframe = (typeof TIMEFRAMES)[number];
@@ -155,6 +156,7 @@ export default function StockChart({ symbol }: { symbol: string }) {
           )
         )}
       </div>
+      <StockFinancials symbol={symbol} />
     </div>
   );
 }
