@@ -1,166 +1,175 @@
-// Define structured metadata for a row data array
-interface FinancialRow {
-  title: string;
-  isPercentage?: boolean;
-  values: (string | number | null)[];
+// @/utils/financialParser.ts
+
+interface SECConceptUnit {
+  end: string;
+  val: number;
+  form: string;
+  start?: string;
+  fy: number;
+  fp: string;
 }
 
-// Target reporting period end dates matching your template requirements
-const TARGET_PERIODS = ["2025-09-30", "2025-12-31", "2026-03-31", "2026-06-30"];
-const TWD_EXCHANGE_RATE = 32.5; // Example conversion multiplier if SEC data loads in USD base
+export interface ConceptPayload {
+  label: string;
+  units: {
+    [unitKey: string]: SECConceptUnit[];
+  };
+}
+
+interface FiscalMilestone {
+  year: number;
+  period: string;
+  headerLabel: string;
+}
+
+const TWD_EXCHANGE_RATE = 32.5;
 
 /**
- * Formats big numerical strings into neat financial suffix layouts (T, B, M)
+ * 1. AUTOMATIC TIMELINE GENERATOR: Steps backward from today to find the last 4 quarters
  */
+export function generateDynamicTimeline(): FiscalMilestone[] {
+  const now = new Date();
+  const currentCalendarYear = now.getFullYear();
+  const currentMonth = now.getMonth(); // 0 = Jan, 11 = Dec
+
+  // Standard Calendar Mapping: Q1 (Jan-Mar), Q2 (Apr-Jun), Q3 (Jul-Sep), Q4 (Oct-Dec)
+  let currentQuarter = 1;
+  if (currentMonth >= 3 && currentMonth <= 5) currentQuarter = 2;
+  if (currentMonth >= 6 && currentMonth <= 8) currentQuarter = 3;
+  if (currentMonth >= 9 && currentMonth <= 11) currentQuarter = 4;
+
+  const milestones: FiscalMilestone[] = [];
+
+  // SEC historical reporting loop: Offset by -1 quarter since current ongoing quarter is unfiled
+  let targetQuarter = currentQuarter - 1;
+  let targetYear = currentCalendarYear;
+
+  if (targetQuarter === 0) {
+    targetQuarter = 4;
+    targetYear -= 1;
+  }
+
+  // Step back precisely 4 sequential quarters
+  for (let i = 0; i < 4; i++) {
+    // The SEC files Q4 metrics under the identifier "FY"
+    const secPeriodCode = targetQuarter === 4 ? "FY" : `Q${targetQuarter}`;
+    const cleanLabel = `Q${targetQuarter} ${targetYear}`;
+
+    milestones.unshift({
+      // unshift ensures ascending chronological order (oldest to newest)
+      year: targetYear,
+      period: secPeriodCode,
+      headerLabel: cleanLabel,
+    });
+
+    targetQuarter -= 1;
+    if (targetQuarter === 0) {
+      targetQuarter = 4;
+      targetYear -= 1;
+    }
+  }
+
+  return milestones;
+}
+
+/**
+ * Extracts true 3-month quarterly data points from a standalone concept response
+ */
+export function extractConceptPeriodData(
+  payload: any,
+  timeline: FiscalMilestone[],
+): Record<string, number> {
+  const periodMap: Record<string, number> = {};
+  if (!payload || !payload.units) return periodMap;
+
+  const unitKey =
+    Object.keys(payload.units).find((k) => k !== "shares") ||
+    Object.keys(payload.units)[0];
+  if (!unitKey) return periodMap;
+
+  const entries: SECConceptUnit[] = payload.units[unitKey] || [];
+
+  entries.forEach((entry) => {
+    const validForm = ["10-Q", "10-K", "6-K", "20-F"].includes(entry.form);
+    if (!validForm) return;
+
+    // FIX: Check if this entry matches our targeted structural fiscal milestones
+    const matchesTimeline = timeline.some(
+      (target) => entry.fy === target.year && entry.fp === target.period,
+    );
+
+    if (matchesTimeline) {
+      // Isolate true 3-month slices for income/expense concepts
+      if (entry.start && entry.end) {
+        const start = new Date(entry.start);
+        const end = new Date(entry.end);
+        const days = (end.getTime() - start.getTime()) / (1000 * 3600 * 24);
+
+        // If it's a full year (FY) filing tag, it might contain the 365-day cumulative value.
+        // We only bypass this if it's a Q1/Q2/Q3 window (around 90 days)
+        if (entry.fp !== "FY" && days > 105) return;
+      }
+
+      let value = entry.val;
+
+      // Map using the explicit fiscal identifier (e.g., "2025-FY" or "2026-Q1")
+      // instead of the volatile, shifting calendar date strings
+      const mapKey = `${entry.fy}-${entry.fp}`;
+      periodMap[mapKey] = value;
+    }
+  });
+
+  return periodMap;
+}
+
+/**
+ * Computes margins on the fly from baseline map states
+ */
+export function computePercentageRow(
+  label: string,
+  numeratorMap: Record<string, number>,
+  denominatorMap: Record<string, number>,
+  timeline: FiscalMilestone[],
+) {
+  const values = timeline.map((target) => {
+    const mapKey = `${target.year}-${target.period}`;
+    const num = numeratorMap[mapKey];
+    const den = denominatorMap[mapKey];
+    if (num && den && den !== 0) {
+      return formatFinancialNumber((num / den) * 100, true);
+    }
+    return "-";
+  });
+  return { title: label, values };
+}
+
+/**
+ * Maps standard chronological arrays out of extracted period records
+ */
+export function buildFinancialRow(
+  label: string,
+  periodMap: Record<string, number>,
+  timeline: FiscalMilestone[],
+) {
+  const values = timeline.map((target) => {
+    const mapKey = `${target.year}-${target.period}`;
+    const val = periodMap[mapKey];
+    return val !== undefined ? formatFinancialNumber(val) : "-";
+  });
+  return { title: label, values };
+}
+
 function formatFinancialNumber(
   value: number | null | undefined,
   isPercentage = false,
 ): string {
   if (value === null || value === undefined || isNaN(value)) return "-";
+  if (isPercentage) return `${value.toFixed(2)}%`;
 
-  if (isPercentage) {
-    return `${value.toFixed(2)}%`;
-  }
-
-  const absoluteValue = Math.abs(value);
-  let formattedString = "";
-
-  if (absoluteValue >= 1_000_000_000_000) {
-    formattedString = `${(value / 1_000_000_000_000).toFixed(2)}T`;
-  } else if (absoluteValue >= 1_000_000_000) {
-    formattedString = `${(value / 1_000_000_000).toFixed(2)}B`;
-  } else if (absoluteValue >= 1_000_000) {
-    formattedString = `${(value / 1_000_000).toFixed(2)}M`;
-  } else {
-    formattedString = value.toFixed(2);
-  }
-
-  return formattedString;
-}
-
-/**
- * Extracts a specific metric out of the deep SEC taxonomy objects
- */
-function extractMetricData(
-  factsPayload: any,
-  primaryTag: string,
-  alternativeTag?: string,
-): Record<string, number> {
-  const periodDataMap: Record<string, number> = {};
-
-  // SEC structure routes through either 'us-gaap' or 'ifrs-full' namespaces
-  const taxonomyGroup =
-    factsPayload.facts?.["us-gaap"] || factsPayload.facts?.["ifrs-full"] || {};
-  const dataBlock =
-    taxonomyGroup[primaryTag] ||
-    (alternativeTag ? taxonomyGroup[alternativeTag] : null);
-
-  if (!dataBlock || !dataBlock.units) return periodDataMap;
-
-  // Grab the base currency array array (USD, TWD, or EUR)
-  const currencyKey = Object.keys(dataBlock.units)[0];
-  const filingsList = dataBlock.units[currencyKey] || [];
-
-  filingsList.forEach((filing: any) => {
-    // Isolate quarterly records (Form 10-Q or Form 6-K)
-    if (
-      TARGET_PERIODS.includes(filing.end) &&
-      (filing.form === "10-Q" ||
-        filing.form === "6-K" ||
-        filing.form === "20-F")
-    ) {
-      // Convert standard raw numbers to TWD currency space if the source base is USD
-      let convertedValue = filing.val;
-      if (currencyKey === "USD") {
-        convertedValue = filing.val * TWD_EXCHANGE_RATE;
-      }
-      periodDataMap[filing.end] = convertedValue;
-    }
-  });
-
-  return periodDataMap;
-}
-
-/**
- * Main parser entry point to orchestrate row arrays
- */
-export function parseSECCompanyFacts(rawSecJson: any) {
-  // Define row configurations to pull sequentially
-  const rowConfigurations = [
-    { label: "Revenue", tag: "Revenue", alt: "Revenues" },
-    { label: "Cost of goods sold", tag: "CostOfSales", alt: "CostOfGoodsSold" },
-    { label: "Cost of revenue", tag: "CostOfSales", alt: "CostOfGoodsSold" },
-    {
-      label: "Research and development expenses",
-      tag: "ResearchAndDevelopmentExpense",
-    },
-    {
-      label: "Total research and development expenses",
-      tag: "ResearchAndDevelopmentExpenseTotal",
-    },
-    {
-      label: "Selling, general, and admin expenses",
-      tag: "AdministrativeExpense",
-      alt: "SellingGeneralAndAdministrativeExpense",
-    },
-    {
-      label: "Operating income",
-      tag: "ProfitLossFromOperatingActivities",
-      alt: "OperatingIncomeLoss",
-    },
-    {
-      label: "Income tax expense",
-      tag: "IncomeTaxExpenseContinuingOperations",
-      alt: "IncomeTaxExpenseBenefit",
-    },
-    { label: "Net income", tag: "ProfitLoss", alt: "NetIncomeLoss" },
-  ];
-
-  const formattedOutputTable = rowConfigurations.map((config) => {
-    const rawDataValuesMap = extractMetricData(
-      rawSecJson,
-      config.tag,
-      config.alt,
-    );
-
-    // Process matching values chronologically through the target dates array loop
-    const mappedPeriodValues = TARGET_PERIODS.map((date) => {
-      const numericVal = rawDataValuesMap[date];
-      return numericVal !== undefined ? formatFinancialNumber(numericVal) : "-";
-    });
-
-    return {
-      title: config.label,
-      values: mappedPeriodValues,
-    };
-  });
-
-  // Calculate dynamic derivation lines like margins on the fly
-  const revenueValues = extractMetricData(rawSecJson, "Revenue", "Revenues");
-  const netIncomeValues = extractMetricData(
-    rawSecJson,
-    "ProfitLoss",
-    "NetIncomeLoss",
-  );
-
-  const computedProfitMargins = TARGET_PERIODS.map((date) => {
-    const rev = revenueValues[date];
-    const net = netIncomeValues[date];
-    if (rev && net) {
-      const marginPercentage = (net / rev) * 100;
-      return formatFinancialNumber(marginPercentage, true);
-    }
-    return "-";
-  });
-
-  formattedOutputTable.push({
-    title: "Net profit margin",
-    values: computedProfitMargins,
-  });
-
-  return {
-    headers: ["Sep 2025", "Dec 2025", "Mar 2026", "Jun 2026"],
-    currency: "All values in TWD",
-    rows: formattedOutputTable,
-  };
+  const absVal = Math.abs(value);
+  if (absVal >= 1_000_000_000_000)
+    return `${(value / 1_000_000_000_000).toFixed(2)}T`;
+  if (absVal >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`;
+  if (absVal >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
+  return value.toFixed(2);
 }

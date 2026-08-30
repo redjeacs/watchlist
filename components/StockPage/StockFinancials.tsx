@@ -30,8 +30,8 @@ export default function PerformanceDashboard({ symbol }: { symbol: string }) {
         if (!res.ok) throw new Error("Failed to load spreadsheet metrics");
 
         const data: ParsedFinancials = await res.json();
-        setFinancialData(data);
         console.log(data);
+        setFinancialData(data);
       } catch (err: any) {
         setError(err.message);
       } finally {
