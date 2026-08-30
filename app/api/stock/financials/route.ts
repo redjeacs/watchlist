@@ -1,7 +1,18 @@
 export const dynamic = "force-dynamic";
+import { parseSECCompanyFacts } from "@/utils/financialParser";
 import { NextRequest, NextResponse } from "next/server";
 
 const SEC_CIK_LOOKUP_KEY = process.env.SEC_CIK_LOOKUP_KEY;
+
+interface SecTickerEntry {
+  cik_str: number;
+  ticker: string;
+  title: string;
+}
+
+interface SecTickersResponse {
+  [key: string]: SecTickerEntry;
+}
 
 const DIRECT_SEC_HEADERS = {
   "User-Agent": "MyFinancialApp/1.0 (jerryc19112235@gmail.com)",
@@ -9,37 +20,50 @@ const DIRECT_SEC_HEADERS = {
   "Accept-Encoding": "gzip, deflate",
 };
 
-async function getCikFromSecApiIo(symbol: string): Promise<string | null> {
-  if (!SEC_CIK_LOOKUP_KEY) {
-    console.error("Missing SEC_API_IO_KEY environment variable.");
-    return null;
-  }
+let tickerToCikCache: Map<string, string> | null = null;
+
+async function initializeTickerMap(): Promise<Map<string, string> | null> {
+  if (tickerToCikCache) return tickerToCikCache;
 
   try {
-    const url = `https://api.sec-api.io/mapping/ticker/${symbol}?token=${SEC_CIK_LOOKUP_KEY}`;
+    const response = await fetch(
+      "https://www.sec.gov/files/company_tickers.json",
+      {
+        method: "GET",
+        headers: DIRECT_SEC_HEADERS,
+        next: { revalidate: 86400 }, // Cache data on Next.js server side for 24 hours
+      },
+    );
 
-    const response = await fetch(url, {
-      method: "GET",
-    });
+    if (!response.ok) throw new Error("Failed to pull corporate directory");
 
-    if (!response.ok) {
-      console.error(
-        `sec-api.io error: ${response.status} ${response.statusText}`,
+    const data: Record<string, SecTickerEntry> = await response.json();
+    const tempMap = new Map<string, string>();
+
+    // Single pass-through to flip structural keys
+    const entries = Object.values(data);
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+      // Store uppercase ticker as key and zero-padded 10-digit CIK as value
+      tempMap.set(
+        entry.ticker.toUpperCase(),
+        String(entry.cik_str).padStart(10, "0"),
       );
-      return null;
     }
 
-    const data = await response.json();
-
-    if (Array.isArray(data) && data.length > 0 && data[0].cik) {
-      return data[0].cik;
-    }
-
-    return null;
+    tickerToCikCache = tempMap;
+    return tickerToCikCache;
   } catch (error) {
-    console.error("Failed to fetch CIK from sec-api.io:", error);
+    console.error("SEC Index initialization error:", error);
     return null;
   }
+}
+
+export async function getCikFromTicker(ticker: string): Promise<string | null> {
+  const map = await initializeTickerMap();
+  if (!map) return null;
+
+  return map.get(ticker.toUpperCase()) || null;
 }
 
 export async function GET(request: NextRequest) {
@@ -54,7 +78,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const rawCik = await getCikFromSecApiIo(symbol);
+    const rawCik = await getCikFromTicker(symbol);
+
     if (!rawCik) {
       return NextResponse.json(
         { error: `CIK lookup failed for ticker symbol: ${symbol}` },
@@ -77,12 +102,9 @@ export async function GET(request: NextRequest) {
 
     const companyFacts = await factsResponse.json();
 
-    return NextResponse.json({
-      ticker: symbol,
-      cik: cik,
-      companyName: companyFacts.entityName,
-      latestQuarterlyRevenues: companyFacts,
-    });
+    const formattedFinancials = parseSECCompanyFacts(companyFacts);
+
+    return NextResponse.json(formattedFinancials);
   } catch (error: any) {
     console.error("Server API handler error:", error);
     return NextResponse.json(
