@@ -4,7 +4,7 @@ import {
   buildFinancialRow,
   computePercentageRow,
   ConceptPayload,
-  generateDynamicTimeline,
+  detectActualTimeline,
 } from "@/utils/financialParser";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -179,7 +179,7 @@ export async function GET(request: NextRequest) {
       ),
     );
 
-    const dynamicTimeline = generateDynamicTimeline();
+    const dynamicTimeline = detectActualTimeline(resolvedPayloads);
 
     // Map raw payloads to timeline map structures
     const dataMaps: Record<string, Record<string, number>> = {};

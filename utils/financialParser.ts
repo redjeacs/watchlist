@@ -22,54 +22,39 @@ interface FiscalMilestone {
   headerLabel: string;
 }
 
-const TWD_EXCHANGE_RATE = 32.5;
-
 /**
  * 1. AUTOMATIC TIMELINE GENERATOR: Steps backward from today to find the last 4 quarters
  */
-export function generateDynamicTimeline(): FiscalMilestone[] {
-  const now = new Date();
-  const currentCalendarYear = now.getFullYear();
-  const currentMonth = now.getMonth(); // 0 = Jan, 11 = Dec
+export function detectActualTimeline(payloads: any[]): string[] {
+  const dateSet = new Set<string>();
 
-  // Standard Calendar Mapping: Q1 (Jan-Mar), Q2 (Apr-Jun), Q3 (Jul-Sep), Q4 (Oct-Dec)
-  let currentQuarter = 1;
-  if (currentMonth >= 3 && currentMonth <= 5) currentQuarter = 2;
-  if (currentMonth >= 6 && currentMonth <= 8) currentQuarter = 3;
-  if (currentMonth >= 9 && currentMonth <= 11) currentQuarter = 4;
+  payloads.forEach((payload) => {
+    if (!payload || !payload.units) return;
+    const unitKey =
+      Object.keys(payload.units).find((k) => k !== "shares") ||
+      Object.keys(payload.units)[0];
+    if (!unitKey) return;
 
-  const milestones: FiscalMilestone[] = [];
+    const entries: SECConceptUnit[] = payload.units[unitKey] || [];
 
-  // SEC historical reporting loop: Offset by -1 quarter since current ongoing quarter is unfiled
-  let targetQuarter = currentQuarter - 1;
-  let targetYear = currentCalendarYear;
+    entries.forEach((entry) => {
+      const validForm = ["10-Q", "10-K", "6-K", "20-F"].includes(entry.form);
+      if (!validForm || !entry.end) return;
 
-  if (targetQuarter === 0) {
-    targetQuarter = 4;
-    targetYear -= 1;
-  }
+      // Ensure it is a 3-month quarter slice to ignore year-to-date totals
+      if (entry.start) {
+        const start = new Date(entry.start);
+        const end = new Date(entry.end);
+        const days = (end.getTime() - start.getTime()) / (1000 * 3600 * 24);
+        if (days > 105) return;
+      }
 
-  // Step back precisely 4 sequential quarters
-  for (let i = 0; i < 4; i++) {
-    // The SEC files Q4 metrics under the identifier "FY"
-    const secPeriodCode = targetQuarter === 4 ? "FY" : `Q${targetQuarter}`;
-    const cleanLabel = `Q${targetQuarter} ${targetYear}`;
-
-    milestones.unshift({
-      // unshift ensures ascending chronological order (oldest to newest)
-      year: targetYear,
-      period: secPeriodCode,
-      headerLabel: cleanLabel,
+      dateSet.add(entry.end);
     });
+  });
 
-    targetQuarter -= 1;
-    if (targetQuarter === 0) {
-      targetQuarter = 4;
-      targetYear -= 1;
-    }
-  }
-
-  return milestones;
+  // Sort chronologically (oldest to newest) and take the last 4 available reporting dates
+  return Array.from(dateSet).sort().slice(-4);
 }
 
 /**
@@ -77,7 +62,7 @@ export function generateDynamicTimeline(): FiscalMilestone[] {
  */
 export function extractConceptPeriodData(
   payload: any,
-  timeline: FiscalMilestone[],
+  targetTimeline: string[],
 ): Record<string, number> {
   const periodMap: Record<string, number> = {};
   if (!payload || !payload.units) return periodMap;
@@ -91,31 +76,20 @@ export function extractConceptPeriodData(
 
   entries.forEach((entry) => {
     const validForm = ["10-Q", "10-K", "6-K", "20-F"].includes(entry.form);
-    if (!validForm) return;
 
-    // FIX: Check if this entry matches our targeted structural fiscal milestones
-    const matchesTimeline = timeline.some(
-      (target) => entry.fy === target.year && entry.fp === target.period,
-    );
-
-    if (matchesTimeline) {
-      // Isolate true 3-month slices for income/expense concepts
-      if (entry.start && entry.end) {
+    // Match strictly based on the exact calendar end string (e.g., "2025-12-27" or "2025-12-31")
+    if (validForm && targetTimeline.includes(entry.end)) {
+      if (entry.start) {
         const start = new Date(entry.start);
         const end = new Date(entry.end);
         const days = (end.getTime() - start.getTime()) / (1000 * 3600 * 24);
-
-        // If it's a full year (FY) filing tag, it might contain the 365-day cumulative value.
-        // We only bypass this if it's a Q1/Q2/Q3 window (around 90 days)
         if (entry.fp !== "FY" && days > 105) return;
       }
 
       let value = entry.val;
 
-      // Map using the explicit fiscal identifier (e.g., "2025-FY" or "2026-Q1")
-      // instead of the volatile, shifting calendar date strings
-      const mapKey = `${entry.fy}-${entry.fp}`;
-      periodMap[mapKey] = value;
+      // Keep the most recently filed value if revisions exist
+      periodMap[entry.end] = value;
     }
   });
 
@@ -129,12 +103,11 @@ export function computePercentageRow(
   label: string,
   numeratorMap: Record<string, number>,
   denominatorMap: Record<string, number>,
-  timeline: FiscalMilestone[],
+  targetTimeline: string[],
 ) {
-  const values = timeline.map((target) => {
-    const mapKey = `${target.year}-${target.period}`;
-    const num = numeratorMap[mapKey];
-    const den = denominatorMap[mapKey];
+  const values = targetTimeline.map((dateStr) => {
+    const num = numeratorMap[dateStr];
+    const den = denominatorMap[dateStr];
     if (num && den && den !== 0) {
       return formatFinancialNumber((num / den) * 100, true);
     }
@@ -149,11 +122,10 @@ export function computePercentageRow(
 export function buildFinancialRow(
   label: string,
   periodMap: Record<string, number>,
-  timeline: FiscalMilestone[],
+  targetTimeline: string[],
 ) {
-  const values = timeline.map((target) => {
-    const mapKey = `${target.year}-${target.period}`;
-    const val = periodMap[mapKey];
+  const values = targetTimeline.map((dateStr) => {
+    const val = periodMap[dateStr];
     return val !== undefined ? formatFinancialNumber(val) : "-";
   });
   return { title: label, values };
