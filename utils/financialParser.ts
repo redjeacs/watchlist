@@ -31,7 +31,7 @@ export function detectActualTimeline(payloads: any[]): string[] {
   payloads.forEach((payload) => {
     if (!payload || !payload.units) return;
     const unitKey =
-      Object.keys(payload.units).find((k) => k !== "shares") ||
+      Object.keys(payload.units).find((k) => k == "USD") ||
       Object.keys(payload.units)[0];
     if (!unitKey) return;
 
@@ -77,7 +77,6 @@ export function extractConceptPeriodData(
   entries.forEach((entry) => {
     const validForm = ["10-Q", "10-K", "6-K", "20-F"].includes(entry.form);
 
-    // Match strictly based on the exact calendar end string (e.g., "2025-12-27" or "2025-12-31")
     if (validForm && targetTimeline.includes(entry.end)) {
       if (entry.start) {
         const start = new Date(entry.start);

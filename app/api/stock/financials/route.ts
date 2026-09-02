@@ -8,16 +8,10 @@ import {
 } from "@/utils/financialParser";
 import { NextRequest, NextResponse } from "next/server";
 
-const SEC_CIK_LOOKUP_KEY = process.env.SEC_CIK_LOOKUP_KEY;
-
 interface SecTickerEntry {
   cik_str: number;
   ticker: string;
   title: string;
-}
-
-interface SecTickersResponse {
-  [key: string]: SecTickerEntry;
 }
 
 const DIRECT_SEC_HEADERS = {
@@ -72,29 +66,34 @@ export async function getCikFromTicker(ticker: string): Promise<string | null> {
   return map.get(ticker.toUpperCase()) || null;
 }
 
-async function fetchConceptWithFallbacks(
-  cik: string,
-  tags: string[],
-): Promise<ConceptPayload | null> {
-  for (const tag of tags) {
-    // Check both standard US GAAP and IFRS taxonomies
-    for (const taxonomy of ["us-gaap", "ifrs-full"]) {
-      try {
-        const url = `https://data.sec.gov/api/xbrl/companyconcept/CIK${cik}/${taxonomy}/${tag}.json`;
-        const res = await fetch(url, {
-          headers: DIRECT_SEC_HEADERS,
-          next: { revalidate: 43200 }, // Cache concept segments for 12 hours
-        });
+async function fetchCompanyFacts(cik: string) {
+  const res = await fetch(
+    `https://data.sec.gov/api/xbrl/companyfacts/CIK${cik}.json`,
+    {
+      headers: DIRECT_SEC_HEADERS,
+      cache: "no-store",
+    },
+  );
 
-        if (res.ok) {
-          const data = await res.json();
-          return data;
-        }
-      } catch (e) {
-        // Continue silently trying tags if individual fetch fails
-      }
+  if (!res.ok)
+    throw new Error(`SEC companyfacts request failed for CIK ${cik}`);
+
+  const data = await res.json();
+  return data;
+}
+
+function getFactByTag(payload: any, tagNames: string[]) {
+  const roots = [payload?.facts?.["us-gaap"], payload?.facts?.["ifrs-full"]];
+
+  for (const root of roots) {
+    if (!root) continue;
+
+    for (const tag of tagNames) {
+      const fact = root[tag];
+      if (fact) return fact;
     }
   }
+
   return null;
 }
 
@@ -118,8 +117,8 @@ export async function GET(request: NextRequest) {
       );
     }
     const cik = rawCik.padStart(10, "0");
+    const companyFacts = await fetchCompanyFacts(cik);
 
-    // Define configurations for parallel execution dispatch
     const targetRowConfigs = [
       {
         id: "revenue",
@@ -173,11 +172,11 @@ export async function GET(request: NextRequest) {
     ];
 
     // Fire all network endpoints in parallel
-    const resolvedPayloads = await Promise.all(
-      targetRowConfigs.map((config) =>
-        fetchConceptWithFallbacks(cik, config.tags),
-      ),
+    const resolvedPayloads = targetRowConfigs.map((config) =>
+      getFactByTag(companyFacts, config.tags),
     );
+
+    console.log(resolvedPayloads);
 
     const dynamicTimeline = detectActualTimeline(resolvedPayloads);
 
