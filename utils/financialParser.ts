@@ -62,8 +62,9 @@ export function detectActualTimeline(payloads: any[]): string[] {
   payloads.forEach((payload) => {
     if (!payload || !payload.units) return;
     const unitKey =
-      Object.keys(payload.units).find((k) => k == "USD") ||
-      Object.keys(payload.units)[0];
+      Object.keys(payload.units).find((k) => k === "USD") ||
+      Object.keys(payload.units).find((k) => k !== "shares") ||
+      "USD";
     if (!unitKey) return;
 
     const entries: SECConceptUnit[] = payload.units[unitKey] || [];
@@ -89,8 +90,9 @@ export function extractConceptPeriodData(
   if (!payload || !payload.units) return periodMap;
 
   const unitKey =
+    Object.keys(payload.units).find((k) => k === "USD") ||
     Object.keys(payload.units).find((k) => k !== "shares") ||
-    Object.keys(payload.units)[0];
+    "USD";
 
   if (!unitKey) return periodMap;
 
@@ -176,7 +178,6 @@ function estimateQ4FromAnnual(
 
   const fiscalYear = annual.fy;
   const annualStart = new Date(annual.start);
-  console.log(annualStart);
   const q1q3 = entries.filter(
     (entry) =>
       entry?.fy === fiscalYear &&

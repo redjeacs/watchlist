@@ -6,6 +6,7 @@ import {
   detectActualTimeline,
 } from "@/utils/financialParser";
 import { NextRequest, NextResponse } from "next/server";
+import { payloadSearcher } from "recharts/types/chart/SunburstChart";
 
 interface SecTickerEntry {
   cik_str: number;
@@ -224,7 +225,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       headers: dynamicTimeline,
-      currency: "All values in TWD",
+      currency: `All values in USD`,
       rows: rows,
     });
   } catch (error: any) {
