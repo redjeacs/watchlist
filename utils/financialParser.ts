@@ -16,10 +16,25 @@ export interface ConceptPayload {
   };
 }
 
-interface FiscalMilestone {
-  year: number;
-  period: string;
-  headerLabel: string;
+function isQuarterlyEntry(entry: any): boolean {
+  if (!entry || !entry.form || !entry.end) return false;
+
+  const validForm = ["10-Q", "10-K", "6-K", "20-F"].includes(entry.form);
+  if (!validForm) return false;
+
+  if (entry.fp) {
+    const fp = String(entry.fp).toUpperCase();
+    if (fp === "FY") return false;
+    if (fp.startsWith("Q")) return true;
+  }
+
+  if (!entry.start) return false;
+
+  const start = new Date(entry.start);
+  const end = new Date(entry.end);
+  const days = (end.getTime() - start.getTime()) / (1000 * 3600 * 24);
+
+  return Number.isFinite(days) && days <= 200;
 }
 
 /**
@@ -38,17 +53,7 @@ export function detectActualTimeline(payloads: any[]): string[] {
     const entries: SECConceptUnit[] = payload.units[unitKey] || [];
 
     entries.forEach((entry) => {
-      const validForm = ["10-Q", "10-K", "6-K", "20-F"].includes(entry.form);
-      if (!validForm || !entry.end) return;
-
-      // Ensure it is a 3-month quarter slice to ignore year-to-date totals
-      if (entry.start) {
-        const start = new Date(entry.start);
-        const end = new Date(entry.end);
-        const days = (end.getTime() - start.getTime()) / (1000 * 3600 * 24);
-        if (days > 105) return;
-      }
-
+      isQuarterlyEntry(entry);
       dateSet.add(entry.end);
     });
   });
@@ -75,20 +80,10 @@ export function extractConceptPeriodData(
   const entries: SECConceptUnit[] = payload.units[unitKey] || [];
 
   entries.forEach((entry) => {
-    const validForm = ["10-Q", "10-K", "6-K", "20-F"].includes(entry.form);
+    if (!isQuarterlyEntry) return;
 
-    if (validForm && targetTimeline.includes(entry.end)) {
-      if (entry.start) {
-        const start = new Date(entry.start);
-        const end = new Date(entry.end);
-        const days = (end.getTime() - start.getTime()) / (1000 * 3600 * 24);
-        if (entry.fp !== "FY" && days > 105) return;
-      }
-
-      let value = entry.val;
-
-      // Keep the most recently filed value if revisions exist
-      periodMap[entry.end] = value;
+    if (targetTimeline.includes(entry.end)) {
+      periodMap[entry.end] = entry.val;
     }
   });
 

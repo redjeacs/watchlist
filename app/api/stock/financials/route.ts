@@ -3,7 +3,6 @@ import {
   extractConceptPeriodData,
   buildFinancialRow,
   computePercentageRow,
-  ConceptPayload,
   detectActualTimeline,
 } from "@/utils/financialParser";
 import { NextRequest, NextResponse } from "next/server";
@@ -82,16 +81,31 @@ async function fetchCompanyFacts(cik: string) {
   return data;
 }
 
+function hasQuarterlyValues(fact: any): boolean {
+  if (!fact?.units) return false;
+
+  const unitArrays = Object.values(fact.units).flat() as any[];
+
+  return unitArrays.some((entry) => {
+    if (!entry || !entry.form || !entry.end) return false;
+
+    const formOK = ["10-Q", "6-K", "20-F"].includes(entry.form);
+    const fpOK = !!entry.fp && /^Q[1-4]$/i.test(String(entry.fp));
+    return formOK && (fpOK || !!entry.start);
+  });
+}
+
 function getFactByTag(payload: any, tagNames: string[]) {
   const roots = [payload?.facts?.["us-gaap"], payload?.facts?.["ifrs-full"]];
 
   for (const root of roots) {
     if (!root) continue;
 
-    for (const tag of tagNames) {
-      const fact = root[tag];
-      if (fact) return fact;
-    }
+    const match = tagNames
+      .map((tag) => root[tag])
+      .find((fact) => hasQuarterlyValues(fact));
+
+    if (match) return match;
   }
 
   return null;
@@ -132,7 +146,14 @@ export async function GET(request: NextRequest) {
       },
       {
         id: "cogs",
-        tags: ["CostOfGoodsAndServicesSold", "CostOfSales", "CostOfGoodsSold"],
+        tags: [
+          "CostOfGoodsAndServicesSold",
+          "CostOfSales",
+          "CostOfGoodsSold",
+          "CostOfRevenue",
+          "CostsOfRevenue",
+          "CostOfGoodsAndServicesSoldNet",
+        ],
         label: "Cost of goods sold",
       },
       {
@@ -176,8 +197,6 @@ export async function GET(request: NextRequest) {
       getFactByTag(companyFacts, config.tags),
     );
 
-    console.log(resolvedPayloads);
-
     const dynamicTimeline = detectActualTimeline(resolvedPayloads);
 
     // Map raw payloads to timeline map structures
@@ -204,7 +223,7 @@ export async function GET(request: NextRequest) {
     rows.push(marginRow);
 
     return NextResponse.json({
-      headers: ["Sep 2025", "Dec 2025", "Mar 2026", "Jun 2026"],
+      headers: dynamicTimeline,
       currency: "All values in TWD",
       rows: rows,
     });
