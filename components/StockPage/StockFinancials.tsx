@@ -51,9 +51,9 @@ export default function PerformanceDashboard({ symbol }: { symbol: string }) {
     return <div className="text-center p-12 text-red-500">Error: {error}</div>;
 
   return (
-    <div className="bg-slate-50 min-h-screen p-8">
+    <div className="bg-slate-650 min-h-screen p-8">
       <div className="max-w-4xl mx-auto mb-6">
-        <h1 className="text-3xl font-extrabold text-slate-900">
+        <h1 className="text-3xl font-extrabold text-slate-250">
           Corporate Income Statement
         </h1>
         <p className="text-slate-500">
