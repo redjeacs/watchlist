@@ -1,36 +1,71 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 📊 Watchlist
 
-## Getting Started
+A robust, full-stack **Next.js** application designed to track real-time stock movements and generate clean, visual financial reports. By pairing responsive client-side visualizations with isolated server-side api route processors, this platform securely and efficiently aggregates complex market statistics.
 
-First, run the development server:
+## 🌐 Social App Repo
+👉 **[View the Completed Project](https://watchlist-beta-five.vercel.app/)**
 
+<p>
+  <img width="800" height="450" alt="watchlist demo" src="https://github.com/user-attachments/assets/592dd190-5db8-4337-bf1a-9ab3dcaef795" />
+</p>
+
+
+---
+
+## 🏗️ Architecture & Features
+
+This application bridges live market streams with custom portfolio reporting using a unified serverless environment:
+
+- **Client-Side Interface:** Dynamically re-renders real-time tickers, calculates live profit/loss percentages, and streams price charts using interactive canvas layers.
+- **Serverless API Routes:** Server-side handlers natively mapped under `/api` consolidates high-frequency calculations, cache historical analytics, and securely sign outbound requests to external market provider Alpaca.
+- **Automated Financial Reports:** Aggregates multi-quarter metrics into inspectable financial tables without sacrificing client performance.
+
+---
+
+## 🛠️ Tech Stack
+
+### 🛡️ Backend API Engine (`/api`)
+- **Backend Routing:** NextJs Route handlers
+- **Third Party Data Providers:** Alpaca live data stream
+
+### 🎨 Frontend Client Layer (`/client`)
+*   **Core UI Engine:** [React](https://react.dev) – Component-driven runtime interface mapping data onto an interactive Virtual DOM.
+*   **Charts:** [Recharts](https://recharts.github.io/) – Powers interactive, highly responsive historical stock performance charts and canvas-based financial reporting visuals.
+*   **Styling Engine:** HTML5, CSS3, and TailwindCSS ensuring responsive design across desktop, tablet, and mobile displays.
+
+---
+
+## 💻 Local Installation & Setup
+
+Follow these steps to run this application locally on your computer:
+
+### 1. Clone the Repository
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.comd/redjeacs/watchlist
+cd watchlist
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Install Project Dependencies
+```bash
+npm install
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 3. Setup Your Environment Variables
+Create a file named `.env.local` in the directory of your project and configure your local or cloud keys:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+/api
+```env
+# Alpaca API Credentials (create an account for free to access api data)
 
-## Learn More
+ALPACA_API_KEY='[YOUR_API_KEY]'
+ALPACA_API_SECRET='[YOUR_API_SECRET]'
+```
 
-To learn more about Next.js, take a look at the following resources:
+### 4. Launch the Local Development Servers
+```bash
+# run your development script
+npm run dev
+```
+Open your browser and navigate to `http://localhost:3000`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
