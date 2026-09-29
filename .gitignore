@@ -40,4 +40,17 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-rag_env/
+# ==========================================
+# Python Monorepo Exclusions
+# ==========================================
+# Ignore the Python virtual environment folder
+server/venv/
+.venv/
+
+# Ignore compiled Python bytecode
+**/__pycache__/
+*.pyc
+
+# Ignore your local vector database files so they don't bloat GitHub
+**/chroma_db/
+

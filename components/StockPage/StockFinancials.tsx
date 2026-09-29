@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import FinancialGrid from "@/components/StockPage/FinancialGrid"; // Path to your Tailwind grid component
+import AIAnalystBox from "./AIAnalystBox";
 
 // Define the shape expected by the UI grid
 interface ParsedFinancials {
@@ -39,7 +40,7 @@ export default function PerformanceDashboard({ symbol }: { symbol: string }) {
     }
 
     loadStockData();
-  }, []);
+  }, [symbol]);
 
   if (loading)
     return (
@@ -62,7 +63,17 @@ export default function PerformanceDashboard({ symbol }: { symbol: string }) {
       </div>
 
       {/* Renders the custom columns effortlessly */}
-      {financialData && <FinancialGrid financialData={financialData} />}
+      <div>
+        {financialData && <FinancialGrid financialData={financialData} />}
+      </div>
+      <div className="max-w-4xl mx-auto">
+        <div className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2 px-1">
+          AI Unstructured Data Analysis
+        </div>
+
+        {/* Renders beautifully under the data grid, completely synced with the active symbol */}
+        <AIAnalystBox activeTicker={symbol} />
+      </div>
     </div>
   );
 }

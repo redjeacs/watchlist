@@ -3,11 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "next:dev": "next dev",
+    "python:dev": "cd server && . venv/bin/activate && uvicorn main:app --host 127.0.0.1 --port 8000 --reload",
+    "python:dev:win": "cd server && venv\\Scripts\\activate && uvicorn main:app --host 127.0.0.1 --port 8000 --reload",
+    "dev": "concurrently -n \"next,python\" -c \"blue,green\" \"npm run next:dev\" \"npm run python:dev\"",
+    "dev:win": "concurrently -n \"next,python\" -c \"blue,green\" \"npm run next:dev\" \"npm run python:dev:win\"",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
-    "test": "vitest"
+    "lint": "next lint"
   },
   "dependencies": {
     "lucide-react": "^1.33.0",
@@ -22,6 +25,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^6.0.5",
+    "concurrently": "^10.0.5",
     "eslint": "^9",
     "eslint-config-next": "16.3.1",
     "tailwindcss": "^4",
