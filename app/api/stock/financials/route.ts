@@ -6,7 +6,6 @@ import {
   detectActualTimeline,
 } from "@/utils/financialParser";
 import { NextRequest, NextResponse } from "next/server";
-import { payloadSearcher } from "recharts/types/chart/SunburstChart";
 
 interface SecTickerEntry {
   cik_str: number;
