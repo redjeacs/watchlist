@@ -10,6 +10,7 @@ import chromadb
 from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
 from openai import OpenAI
 from pathlib import Path
+from pprint import pprint
 
 app = FastAPI(title="Financial Watchlist RAG Service", version="1.0.0")
 
@@ -103,11 +104,30 @@ def fetch_and_index_expert_news(ticker_symbol: str) -> bool:
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
     }
+
     articles_indexed_count = 0
 
-    for idx, item in enumerate(news_items[:5]):  # Process top 5 most recent articles
-        url = item.get("link")
-        title = item.get("title")
+    for item in news_items:
+        if articles_indexed_count >= 5:
+            break
+
+        # Safely drill down to locate the polymorphic contentType tag
+        target_meta = item.get("content") if "content" in item else item
+        content_type = target_meta.get("contentType") or target_meta.get("type")
+
+        # 🎯 KEEP ONLY STORIES (Skip everything else like VIDEO assets)
+        if content_type != "STORY":
+            continue
+
+        url = target_meta.get("link")
+        if not url and "canonicalUrl" in target_meta:
+            url = target_meta["canonicalUrl"].get("url")
+
+        title = target_meta.get("title", "Untitled Financial Report")
+
+        # Fallback URL safety verification
+        if not url or url == "None" or not str(url).startswith("http"):
+            continue
 
         try:
             response = requests.get(url, headers=headers, timeout=8)
@@ -131,13 +151,17 @@ def fetch_and_index_expert_news(ticker_symbol: str) -> bool:
             chunks = recursive_sentence_chunk(full_text, max_chars=800, overlap=100)
 
             for chunk_idx, chunk in enumerate(chunks):
-                doc_id = f"{ticker_symbol}_{idx}_{chunk_idx}"
+                doc_id = f"{ticker_symbol}_{articles_indexed_count}_{chunk_idx}"
                 collection.upsert(
                     documents=[chunk],
                     metadatas=[{"ticker": ticker_symbol, "title": title, "url": url}],
                     ids=[doc_id],
                 )
             articles_indexed_count += 1
+            print(
+                f"✅ Successfully indexed article {articles_indexed_count}/5: {title}"
+            )
+
         except Exception as e:
             print(f"⚠️ Could not parse article {url}: {e}")
             continue
