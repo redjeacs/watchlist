@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-interface IngestPayload {
-  ticker: string;
-}
+const FASTAPI_BASE_URL = "http://127.0.0.1:8000";
 
 interface QueryPayload {
   ticker: string;
@@ -27,12 +25,11 @@ export async function POST(req: NextRequest) {
     // 📡 1. INGESTION BLOCK
     // ==========================================
     if (action === "ingest") {
-      const payload: IngestPayload = { ticker: tickerSymbol };
+      const params = new URLSearchParams({ ticker: tickerSymbol });
 
-      const response = await fetch("http://127.0.0.1:8000", {
+      const response = await fetch(`${FASTAPI_BASE_URL}/api/ingest?${params}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
@@ -55,7 +52,7 @@ export async function POST(req: NextRequest) {
     // ==========================================
     if (action === "status") {
       const response = await fetch(
-        `http://127.0.0.1:8000/status/${tickerSymbol}`,
+        `${FASTAPI_BASE_URL}/api/ingest/status/${tickerSymbol}`,
         {
           method: "GET",
           headers: { "Content-Type": "application/json" },
@@ -84,7 +81,7 @@ export async function POST(req: NextRequest) {
 
       const payload: QueryPayload = { ticker: tickerSymbol, question };
 
-      const response = await fetch("http://127.0.0.1:8000", {
+      const response = await fetch(`${FASTAPI_BASE_URL}/api/query`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

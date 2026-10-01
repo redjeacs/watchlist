@@ -48,15 +48,6 @@ llm_client = OpenAI(base_url=LM_STUDIO_URL, api_key="lm-studio")
 
 
 # 3. Pydantic Models for Strict Request/Response Typing
-class IngestRequest(BaseModel):
-    ticker: str
-
-
-class IngestResponse(BaseModel):
-    status: str
-    message: str
-
-
 class QueryRequest(BaseModel):
     ticker: str
     question: str
@@ -174,8 +165,8 @@ def async_ingestion_worker(ticker_symbol: str):
 
 
 @app.post("/api/ingest", status_code=status.HTTP_202_ACCEPTED)
-def trigger_ingestion(payload: IngestRequest, background_tasks: BackgroundTasks):
-    ticker_symbol = payload.ticker.upper()
+def trigger_ingestion(ticker: str, background_tasks: BackgroundTasks):
+    ticker_symbol = ticker.upper()
 
     current_status = ingestion_registry.get(ticker_symbol)
     if current_status == "processing":
@@ -202,9 +193,10 @@ def get_ingestion_status(ticker: str):
 @app.post("/api/query", response_model=QueryResponse)
 def query_pipeline(payload: QueryRequest):
     ticker_symbol = payload.ticker.upper()
+    question = payload.question
 
     results = collection.query(
-        query_texts=[payload.question], n_results=3, where={"ticker": ticker_symbol}
+        query_texts=[question], n_results=3, where={"ticker": ticker_symbol}
     )
 
     context_documents = results.get("documents", [[]])[0]

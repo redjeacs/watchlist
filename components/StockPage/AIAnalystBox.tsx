@@ -41,6 +41,7 @@ export default function AIAnalystBox({
       });
 
       const ingestData = await ingestRes.json();
+      console.log(ingestData);
       if (!ingestRes.ok)
         throw new Error(
           ingestData.error || "Ingestion loop initialization dropped.",
