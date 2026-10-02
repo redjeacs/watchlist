@@ -1,16 +1,22 @@
 import os
-import requests
-import yfinance as yf
-from bs4 import BeautifulSoup
 from fastapi import FastAPI, HTTPException, BackgroundTasks, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List
 import chromadb
 from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
 from openai import OpenAI
 from pathlib import Path
 from pprint import pprint
+from datetime import datetime, timedelta
+import finnhub
+import asyncio
+from dotenv import load_dotenv
+
+BASE_DIR = Path(__file__).resolve().parent
+ENV_PATH = BASE_DIR.parent / ".env.local"
+
+load_dotenv(dotenv_path=ENV_PATH)
 
 app = FastAPI(title="Financial Watchlist RAG Service", version="1.0.0")
 
@@ -87,83 +93,79 @@ def recursive_sentence_chunk(
 # ==========================================
 # 🛠️ CORE BUSINESS LOGIC: SCRAPER & ENGINE
 # ==========================================
-def fetch_and_index_expert_news(ticker_symbol: str) -> bool:
-    """Fetches real-time market data, parses the HTML structural elements, and stores them in ChromaDB."""
-    print(f"📡 Fetching expert streams for {ticker_symbol} from yfinance...")
-    ticker = yf.Ticker(ticker_symbol)
+
+
+async def fetch_and_index_expert_news(ticker_symbol: str) -> bool:
+    """
+    Fetches real-time stock-specific news from Finnhub using the official SDK,
+    offloads blocking calls to a worker thread, and chunks into ChromaDB.
+    """
+    print(f"📡 Fetching professional feeds for {ticker_symbol} from Finnhub Client...")
+
+    FINNHUB_TOKEN = os.environ.get("FINNHUB_API_KEY", "YOUR_FINNHUB_API_KEY")
+    if FINNHUB_TOKEN == "YOUR_FINNHUB_API_KEY" or not FINNHUB_TOKEN:
+        print("❌ Error: Missing FINNHUB_API_KEY environment variable.")
+        return False
+
+    # 1. Initialize the official client engine
+    finnhub_client = finnhub.Client(api_key=FINNHUB_TOKEN)
+
+    # Calculate date strings
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=7)
+    str_to_date = end_date.strftime("%Y-%m-%d")
+    str_from_date = start_date.strftime("%Y-%m-%d")
+
     try:
-        news_items = ticker.news
+        # 2. Use asyncio.to_thread to run the synchronous SDK network fetch off the main loop
+        # Note: '_from' requires an underscore prefix to prevent native Python keyword collision
+        news_items = await asyncio.to_thread(
+            finnhub_client.company_news,
+            ticker_symbol.upper(),
+            _from=str_from_date,
+            to=str_to_date,
+        )
     except Exception as e:
-        print(f"⚠️ Failed to talk to yfinance ecosystem: {e}")
+        print(f"⚠️ Failed to communicate with Finnhub SDK client: {e}")
         return False
 
     if not news_items:
-        print(f"❌ No recent articles found for {ticker_symbol}")
+        print(f"❌ No recent articles found for {ticker_symbol} in the last 7 days.")
         return False
 
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
-    }
-
+    # Filter to process the first 5 clean news entries
+    target_items = news_items[:5]
     articles_indexed_count = 0
 
-    for item in news_items:
-        if articles_indexed_count >= 5:
-            break
+    for idx, item in enumerate(target_items):
+        title = item.get("headline", "Untitled Financial Report")
+        summary = item.get("summary", "")
+        article_url = item.get("url", "")
 
-        # Safely drill down to locate the polymorphic contentType tag
-        target_meta = item.get("content") if "content" in item else item
-        content_type = target_meta.get("contentType") or target_meta.get("type")
-
-        # 🎯 KEEP ONLY STORIES (Skip everything else like VIDEO assets)
-        if content_type != "STORY":
-            continue
-
-        url = target_meta.get("link")
-        if not url and "canonicalUrl" in target_meta:
-            url = target_meta["canonicalUrl"].get("url")
-
-        title = target_meta.get("title", "Untitled Financial Report")
-
-        # Fallback URL safety verification
-        if not url or url == "None" or not str(url).startswith("http"):
+        full_text = summary if len(summary.strip()) > 30 else title
+        if len(full_text) < 40:
             continue
 
         try:
-            response = requests.get(url, headers=headers, timeout=8)
-            if response.status_code != 200:
-                continue
-
-            soup = BeautifulSoup(response.content, "lxml")
-            for junk in soup(["script", "style", "nav", "footer", "header", "aside"]):
-                junk.decompose()
-
-            paragraphs = [
-                p.get_text().strip()
-                for p in soup.find_all("p")
-                if len(p.get_text().strip()) > 40
-            ]
-            full_text = "\n".join(paragraphs)
-
-            if len(full_text) < 200:
-                continue
-
             chunks = recursive_sentence_chunk(full_text, max_chars=800, overlap=100)
 
             for chunk_idx, chunk in enumerate(chunks):
-                doc_id = f"{ticker_symbol}_{articles_indexed_count}_{chunk_idx}"
+                doc_id = f"{ticker_symbol}_{idx}_{chunk_idx}"
                 collection.upsert(
                     documents=[chunk],
-                    metadatas=[{"ticker": ticker_symbol, "title": title, "url": url}],
+                    metadatas=[
+                        {"ticker": ticker_symbol, "title": title, "url": article_url}
+                    ],
                     ids=[doc_id],
                 )
+
             articles_indexed_count += 1
             print(
-                f"✅ Successfully indexed article {articles_indexed_count}/5: {title}"
+                f"✅ Successfully indexed SDK article {articles_indexed_count}/5: {title}"
             )
 
         except Exception as e:
-            print(f"⚠️ Could not parse article {url}: {e}")
+            print(f"⚠️ Could not index dataset chunk for {article_url}: {e}")
             continue
 
     return articles_indexed_count > 0
@@ -175,10 +177,10 @@ def fetch_and_index_expert_news(ticker_symbol: str) -> bool:
 ingestion_registry = {}
 
 
-def async_ingestion_worker(ticker_symbol: str):
+async def async_ingestion_worker(ticker_symbol: str):
     try:
         ingestion_registry[ticker_symbol] = "processing"
-        success = fetch_and_index_expert_news(ticker_symbol)
+        success = await fetch_and_index_expert_news(ticker_symbol)
         if success:
             ingestion_registry[ticker_symbol] = "completed"
         else:
@@ -189,7 +191,7 @@ def async_ingestion_worker(ticker_symbol: str):
 
 
 @app.post("/api/ingest", status_code=status.HTTP_202_ACCEPTED)
-def trigger_ingestion(ticker: str, background_tasks: BackgroundTasks):
+async def trigger_ingestion(ticker: str, background_tasks: BackgroundTasks):
     ticker_symbol = ticker.upper()
 
     current_status = ingestion_registry.get(ticker_symbol)
