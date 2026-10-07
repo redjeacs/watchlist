@@ -126,7 +126,7 @@ export async function POST(
     }
 
     // =========================================================================
-    // ☁️ BRANCH B: PRODUCTION NATIVE CLOUD GOOGLE GEMINI PIPELINE (/api/ai/gemini)
+    // ☁️ BRANCH B: PRODUCTION CLOUD GOOGLE GEMINI PIPELINE (/api/ai/gemini)
     // =========================================================================
     if (targetEngine === "gemini") {
       if (action === "ingest") {
