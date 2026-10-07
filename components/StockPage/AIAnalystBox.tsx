@@ -11,6 +11,11 @@ export default function AIAnalystBox({
 }: {
   activeTicker: string;
 }) {
+  // 🎛️ 1. Processing Engine State Toggle ("gemini" or "local")
+  const [aiEngine, setAiEngine] = useState<"gemini" | "local" | string>(
+    "gemini",
+  );
+
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [analysisReport, setAnalysisReport] = useState("");
@@ -29,12 +34,16 @@ export default function AIAnalystBox({
 
     try {
       // -----------------------------------------------------------------
-      // PHASE 1: Trigger background scraping & parsing via Python FastAPI
+      // PHASE 1: Trigger background scraping & parsing via API Gateway route
       // -----------------------------------------------------------------
       setStatusMessage(
-        "📡 Step 1/3: Spin-up async scraping workers inside FastAPI...",
+        aiEngine === "local"
+          ? "📡 Step 1/3: Spin-up async scraping workers inside FastAPI..."
+          : "📡 Step 1/2: Preparing Cloud Ingestion and parsing triggers...",
       );
-      const ingestRes = await fetch("/api/ai", {
+
+      // Points dynamically to /api/ai/local or /api/ai/gemini based on current state
+      const ingestRes = await fetch(`/api/ai/${aiEngine}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ticker: activeTicker, action: "ingest" }),
@@ -47,50 +56,54 @@ export default function AIAnalystBox({
         );
 
       // -----------------------------------------------------------------
-      // PHASE 2: Safe Async Loop Polling (Bypasses Next.js Timeout Triggers)
+      // PHASE 2: Safe Async Loop Polling (ONLY EXECUTES FOR LOCAL PYTHON)
       // -----------------------------------------------------------------
-      let isProcessing = true;
-      let durationSeconds = 0;
+      if (aiEngine === "local") {
+        let isProcessing = true;
+        let durationSeconds = 0;
 
-      while (isProcessing) {
-        durationSeconds += 2;
-        // Safety valve: Throw error if database ingestion hangs past 60s
-        if (durationSeconds > 60) {
-          throw new Error(
-            "Ingestion workload exceeded safety execution limits (60s).",
+        while (isProcessing) {
+          durationSeconds += 2;
+          if (durationSeconds > 60) {
+            throw new Error(
+              "Ingestion workload exceeded safety execution limits (60s).",
+            );
+          }
+
+          await delay(2000);
+
+          setStatusMessage(
+            `⏳ Step 2/3: Python background worker parsing articles... (${durationSeconds}s)`,
           );
-        }
 
-        await delay(2000); // Hold for 2 seconds before requesting status validation
+          const statusRes = await fetch(`/api/ai/${aiEngine}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ticker: activeTicker, action: "status" }),
+          });
 
-        setStatusMessage(
-          `⏳ Step 2/3: Python background worker parsing articles... (${durationSeconds}s)`,
-        );
+          const statusData = await statusRes.json();
 
-        const statusRes = await fetch("/api/ai", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ticker: activeTicker, action: "status" }),
-        });
-
-        const statusData = await statusRes.json();
-
-        if (statusData.status === "completed") {
-          isProcessing = false;
-        } else if (statusData.status === "failed") {
-          throw new Error(
-            "Python financial data ingestion worker failed to extract document chunks.",
-          );
+          if (statusData.status === "completed") {
+            isProcessing = false;
+          } else if (statusData.status === "failed") {
+            throw new Error(
+              "Python financial data ingestion worker failed to extract document chunks.",
+            );
+          }
         }
       }
 
       // -----------------------------------------------------------------
-      // PHASE 3: Query stored chunks & let Qwen2.5-Coder process report
+      // PHASE 3: Query stored chunks & calculate financial analyst report
       // -----------------------------------------------------------------
       setStatusMessage(
-        "🤖 Step 3/3: Mapping vectors & computing report via Qwen2.5-Coder-14B...",
+        aiEngine === "local"
+          ? "🤖 Step 3/3: Mapping vectors & computing report via Qwen2.5-Coder-14B..."
+          : "🤖 Step 2/2: Mapping vectors & performing inference via Gemini 3.8 Flash...",
       );
-      const queryRes = await fetch("/api/ai", {
+
+      const queryRes = await fetch(`/api/ai/${aiEngine}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -106,9 +119,19 @@ export default function AIAnalystBox({
           queryData.error || "Analytical model generation failed.",
         );
 
-      // Bind properties cleanly back into state arrays
-      setAnalysisReport(queryData.analysis);
-      setSources(queryData.sources || []);
+      // -----------------------------------------------------------------
+      // PHASE 4: Handle conditional object properties depending on active runtime engine
+      // -----------------------------------------------------------------
+      if (aiEngine === "gemini") {
+        // Cloud payload maps response directly to data.answer
+        setAnalysisReport(queryData.answer);
+        setSources([]); // Cloud RAG fetches from global index metadata
+      } else {
+        // Local Python server payload maps response directly to data.analysis
+        setAnalysisReport(queryData.analysis);
+        setSources(queryData.sources || []);
+      }
+
       setStatusMessage("");
     } catch (error: any) {
       setAnalysisReport(
@@ -122,50 +145,104 @@ export default function AIAnalystBox({
 
   return (
     <div className="p-5 bg-gray-900 border border-gray-800 rounded-xl text-white shadow-xl mt-6">
-      <h3 className="text-md font-bold mb-1 flex items-center gap-2">
-        <span>🐍</span> Python RAG Research Engine — {activeTicker}
-      </h3>
-      <p className="text-xs text-gray-400 mb-4">
-        Extracts unstructured financial nodes and passes data arrays through
-        your local Python microservice.
-      </p>
+      {/* 🎛️ ENGINE INTERFACE HEADER SELECTOR TOGGLE */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-gray-800 pb-4 mb-4 gap-3">
+        <div>
+          <h3 className="text-md font-bold mb-0.5 flex items-center gap-2">
+            <span>{aiEngine === "local" ? "🐍" : "✨"}</span> Financial RAG
+            Research Engine — {activeTicker}
+          </h3>
+          <p className="text-xs text-gray-400">
+            {aiEngine === "local"
+              ? "Passing data arrays through your local Python microservice backend."
+              : "Querying native cloud vector embeddings via Pinecone Serverless and Gemini."}
+          </p>
+        </div>
 
+        {/* Binary Engine Toggle Buttons */}
+        <div className="flex bg-gray-950 p-1 rounded-lg border border-gray-800 w-full sm:w-auto self-start">
+          <button
+            type="button"
+            onClick={() => setAiEngine("gemini")}
+            disabled={loading}
+            className={`py-1.5 px-3 text-xs font-semibold rounded-md transition-all ${
+              aiEngine === "gemini"
+                ? "bg-blue-600 text-white shadow-md"
+                : "text-gray-400 hover:text-white disabled:opacity-50"
+            }`}
+          >
+            ☁️ Cloud Gemini
+          </button>
+          <button
+            type="button"
+            onClick={() => setAiEngine("local")}
+            disabled={loading}
+            className={`py-1.5 px-3 text-xs font-semibold rounded-md transition-all ${
+              aiEngine === "local"
+                ? "bg-emerald-600 text-white shadow-md"
+                : "text-gray-400 hover:text-white disabled:opacity-50"
+            }`}
+          >
+            Local
+          </button>
+        </div>
+      </div>
+
+      {/* Main Input Form Block */}
       <div className="space-y-3">
         <label className="text-xs font-semibold text-gray-300">
-          Ask your Local AI Workspace:
+          Ask your Active{" "}
+          {aiEngine === "local"
+            ? "Qwen2.5 Workstation"
+            : "Gemini Core Assistant"}
+          :
         </label>
         <input
           type="text"
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           disabled={loading}
-          className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-sm outline-none focus:border-emerald-500 text-gray-100 disabled:opacity-50"
+          className={`w-full p-2.5 bg-gray-800 border rounded-lg text-sm outline-none transition text-gray-100 disabled:opacity-50 ${
+            aiEngine === "local"
+              ? "focus:border-emerald-500 border-gray-700"
+              : "focus:border-blue-500 border-gray-700"
+          }`}
         />
 
         <button
           onClick={executePipelineWorkflow}
           disabled={loading || !activeTicker}
-          className="w-full py-2.5 bg-linear-to-r from-emerald-600 to-teal-600 rounded-lg text-sm font-semibold hover:from-emerald-500 hover:to-teal-500 disabled:opacity-30 transition-all shadow-md"
+          className={`w-full py-2.5 rounded-lg text-sm font-semibold transition-all shadow-md disabled:opacity-30 ${
+            aiEngine === "local"
+              ? "bg-linear-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500"
+              : "bg-linear-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500"
+          }`}
         >
           {loading ? "Processing System Array..." : "Run Pipeline Computation"}
         </button>
       </div>
 
-      {/* Dynamic Status Progress Box */}
+      {/* Dynamic Status Progress Alert Box */}
       {statusMessage && (
-        <div className="mt-4 p-3 bg-gray-800/50 border border-dashed border-gray-700 rounded-lg text-xs font-mono text-emerald-400 animate-pulse">
+        <div
+          className={`mt-4 p-3 bg-gray-800/50 border border-dashed rounded-lg text-xs font-mono animate-pulse ${
+            aiEngine === "local"
+              ? "border-emerald-800 text-emerald-400"
+              : "border-blue-800 text-blue-400"
+          }`}
+        >
           {statusMessage}
         </div>
       )}
 
-      {/* AI Analysis Final Generated Text Area */}
+      {/* AI Generated Text Display Output Panel */}
       {analysisReport && (
         <div className="mt-4 space-y-3">
           <div className="p-4 bg-black rounded-lg text-xs leading-relaxed max-h-72 overflow-y-auto border border-gray-800 font-mono text-gray-200 whitespace-pre-wrap">
             {analysisReport}
           </div>
 
-          {/* Render Clickable Citations cleanly below content block */}
+          {/* Render Clickable Citations (Only shown for Local Engine if arrays exist) */}
           {sources.length > 0 && (
             <div className="p-3 bg-gray-950 border border-gray-800 rounded-lg">
               <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider block mb-1.5">
