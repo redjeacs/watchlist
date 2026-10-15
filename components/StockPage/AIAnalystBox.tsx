@@ -23,6 +23,16 @@ export default function AIAnalystBox({
   const [question, setQuestion] = useState(
     "What are the major headwinds or expansion catalysts mentioned by experts?",
   );
+  const inProduction = process.env.NODE_ENV === "production";
+
+  const isWarningBox = inProduction && aiEngine === "local";
+  const showStatusBox = statusMessage || isWarningBox;
+
+  const statusBoxClasses = isWarningBox
+    ? "border-amber-800 text-amber-400 bg-amber-950/20"
+    : aiEngine === "local"
+      ? "border-emerald-800 text-emerald-400 animate-pulse"
+      : "border-blue-800 text-blue-400 animate-pulse";
 
   // Helper utility to pause execution between status pings
   const delay = (ms: number) => new Promise((res) => setTimeout(res, ms));
@@ -99,8 +109,8 @@ export default function AIAnalystBox({
       // -----------------------------------------------------------------
       setStatusMessage(
         aiEngine === "local"
-          ? "🤖 Step 3/3: Mapping vectors & computing report via Qwen2.5-Coder-14B..."
-          : "🤖 Step 2/2: Mapping vectors & performing inference via Gemini 3.8 Flash...",
+          ? "🤖 Step 3/3: Mapping vectors & computing report via Local Model..."
+          : "🤖 Step 2/2: Mapping vectors & performing inference via Gemini 3.6 Flash...",
       );
 
       const queryRes = await fetch(`/api/ai/${aiEngine}`, {
@@ -193,7 +203,7 @@ export default function AIAnalystBox({
         <label className="text-xs font-semibold text-gray-300">
           Ask your Active{" "}
           {aiEngine === "local"
-            ? "Qwen2.5 Workstation"
+            ? "Local Model Workstation"
             : "Gemini Core Assistant"}
           :
         </label>
@@ -211,7 +221,7 @@ export default function AIAnalystBox({
 
         <button
           onClick={executePipelineWorkflow}
-          disabled={loading || !activeTicker}
+          disabled={isWarningBox || loading || !activeTicker}
           className={`w-full py-2.5 rounded-lg text-sm font-semibold transition-all shadow-md disabled:opacity-30 ${
             aiEngine === "local"
               ? "bg-linear-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500"
@@ -223,15 +233,31 @@ export default function AIAnalystBox({
       </div>
 
       {/* Dynamic Status Progress Alert Box */}
-      {statusMessage && (
+      {showStatusBox && (
         <div
-          className={`mt-4 p-3 bg-gray-800/50 border border-dashed rounded-lg text-xs font-mono animate-pulse ${
-            aiEngine === "local"
-              ? "border-emerald-800 text-emerald-400"
-              : "border-blue-800 text-blue-400"
-          }`}
+          className={`mt-4 p-3 bg-gray-800/50 border border-dashed rounded-lg text-xs font-mono ${statusBoxClasses}`}
         >
-          {statusMessage}
+          {isWarningBox ? (
+            <div className="space-y-1">
+              <p className="font-semibold">
+                ⚠️ Local RAG pipeline is disabled in production.
+              </p>
+              <p className="text-gray-400 font-sans leading-normal">
+                Want to run this workload locally? Check out my{" "}
+                <a
+                  href="https://github.com/redjeacs/watchlist" // Replace with your actual GitHub link
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-amber-300 underline underline-offset-2 hover:text-amber-200 transition"
+                >
+                  GitHub repository
+                </a>{" "}
+                to spin up a self-hosted model on your own hardware!
+              </p>
+            </div>
+          ) : (
+            statusMessage
+          )}
         </div>
       )}
 
